@@ -6,8 +6,6 @@
 
 #include <stdio.h>
 #include <immintrin.h> // Required to use intrinsic functions
-#include <pthread.h>
-#include <CImg.h>
 
 
 // TODO: Example of use of intrinsic functions
