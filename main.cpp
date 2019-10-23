@@ -12,21 +12,21 @@
 // This example doesn't include any code about image processing
 
 
-#define ARRAY_SIZE       18 // Array size. Note: It is not a multiple of 8
+#define VECTOR_SIZE       18 // Array size. Note: It is not a multiple of 8
 #define ITEMS_PER_PACKET (sizeof(__m256)/sizeof(float))
 
 
 int main() {
 
 	// Data arrays to sum. May be or not memory aligned to __m256 size (32 bytes)
-    float a[ARRAY_SIZE], b[ARRAY_SIZE];
+    float a[VECTOR_SIZE], b[VECTOR_SIZE];
 
     // Calculation of the size of the resulting array
     // How many 256 bit packets fit in the array?
-    int nPackets = (ARRAY_SIZE * sizeof(float)/sizeof(__m256));
+    int nPackets = (VECTOR_SIZE * sizeof(float)/sizeof(__m256));
 
     // If it is not a exact number we need to add one more packet
-    if ( ((ARRAY_SIZE * sizeof(float))%sizeof(__m256)) != 0) {
+    if ( ((VECTOR_SIZE * sizeof(float))%sizeof(__m256)) != 0) {
         nPackets++;
 	}
    
@@ -38,7 +38,7 @@ int main() {
     __m256 va, vb; 
 
     // Initialize data arrays
-    for (int i = 0; i < ARRAY_SIZE; i++) {
+    for (int i = 0; i < VECTOR_SIZE; i++) {
         *(a + i) = (float) i;       // a =  0, 1, 2, 3, …
         *(b + i) = (float) (2 * i); // b =  0, 2, 4, 6, …
     }
@@ -66,7 +66,7 @@ int main() {
     *(__m256 *)(c + ITEMS_PER_PACKET) = _mm256_add_ps(va, vb);
     
     // Print resulting data from array addition
-    for (int i = 0; i < ARRAY_SIZE; i++) {
+    for (int i = 0; i < VECTOR_SIZE; i++) {
         printf("\nc[%d]: %f", i, *(c + i));
 	}
   
