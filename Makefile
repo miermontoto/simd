@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -Wall -fmessage-length=0 -march=native
-LIBS = -L/usr/X11R6/lib -lm -lX11
+LIBS = -L/usr/X11R6/lib -lpthread -lm -lX11
 DBGDIR = debug
 RELDIR = release
 OBJS = $(patsubst %.cpp,%.o,$(wildcard *.cpp))
