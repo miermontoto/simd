@@ -64,6 +64,18 @@ int main() {
     va = _mm256_loadu_ps((a + ITEMS_PER_PACKET)); 
     vb = _mm256_loadu_ps((b + ITEMS_PER_PACKET)); 
     *(__m256 *)(c + ITEMS_PER_PACKET) = _mm256_add_ps(va, vb);
+
+    // If vectors va and vb have not a number of elements multiple of ITEMS_PER_PACKET 
+    // it is necessary to differentiate the last iteration. 
+
+    // Calculation of the elements in va and vb in excess
+    int dataInExcess = (VECTOR_SIZE)%(sizeof(__m256)/sizeof(float));
+
+    // Surplus data can be processed sequentially
+    
+    for (int i =0; i< dataInExcess; i++){
+        *(c + 2 * ITEMS_PER_PACKET + i) = *(a + 2 * ITEMS_PER_PACKET + i) + *(b + 2 * ITEMS_PER_PACKET + i);
+    }
     
     // Print resulting data from array addition
     for (int i = 0; i < VECTOR_SIZE; i++) {
