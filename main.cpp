@@ -1,177 +1,90 @@
+/*
+ * Main.cpp
+ *
+ *  Created on: Fall 2019
+ */
+
 #include <stdio.h>
-#include <math.h>
-#include <CImg.h>
-#include <time.h>
-#include <iostream>     // std::cout
-#include <algorithm>    // std::max
-#include <immintrin.h>  // std::intrinsic functions
+#include <immintrin.h> // Required to use intrinsic functions
 
-using namespace std;
-using namespace cimg_library;
 
-#define REPETITIONS 17
-#define ITEMSPERPACKET (sizeof(__m256) / sizeof(float))
+// TODO: Example of use of intrinsic functions
+// This example doesn't include any code about image processing
 
-const char* SOURCE_IMG      = "bailarina.bmp"; // source image's file name.
-const char* HELP_IMG        = "background_V.bmp"; // aid image's file name.
-const char* DESTINATION_IMG = "result.bmp"; // resulting image's file name.
+
+#define VECTOR_SIZE       18 // Array size. Note: It is not a multiple of 8
+#define ITEMS_PER_PACKET (sizeof(__m256)/sizeof(float))
 
 
 int main() {
 
-    CImg<float> srcImage(SOURCE_IMG); // Source image's information
-	CImg<float> aidImage(HELP_IMG);   // Aid image's information
+	// Data arrays to sum. May be or not memory aligned to __m256 size (32 bytes)
+    float a[VECTOR_SIZE], b[VECTOR_SIZE];
 
-    float *pRsrc, *pGsrc, *pBsrc; // Source image pointers
-	float *pRaid, *pGaid, *pBaid; // Aid image pointers
-    float *pDstImage;
-    uint width, height; // General image information variables
-	uint nComp;
-    int nPixels = width * height;
+    // Calculation of the size of the resulting array
+    // How many 256 bit packets fit in the array?
+    int nPackets = (VECTOR_SIZE * sizeof(float)/sizeof(__m256));
 
-    // Time variables necessary to display the execution time when the algorithm is done.
-	struct timespec tStart, tEnd;
-	double dElapsedTimeS;
-
-    // Information about the source image is stored for later use.
-    width  = srcImage.width();
-	height = srcImage.height();
-	nComp  = srcImage.spectrum();
-
-    // Resulting image allocation
-    pDstImage = (float *) malloc (nPixels * nComp * sizeof(float));
-	if (pDstImage == NULL) {
-		perror("Couldn't allocate resulting image.");
-		exit(1);
+    // If it is not a exact number we need to add one more packet
+    if ( ((VECTOR_SIZE * sizeof(float))%sizeof(__m256)) != 0) {
+        nPackets++;
 	}
+   
+    // Create an array aligned to 32 bytes (256 bits) memory boundaries to store the sum.
+    // Aligned memory access improves performance    
+    float *c = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
 
-    // Number of packets necessary to process an image.
-    int nPackets = (nPixels / ITEMSPERPACKET);
-    // If it isn't divisible, add one more packet (it won't be completely processed)
-    if ( ((nPixels * sizeof(float)) % sizeof(__m256)) != 0) nPackets++;
+    // 32 bytes (256 bits) packets. Used to stored aligned memory data
+    __m256 va, vb; 
 
-    // Memory allocation for the destination image's components.
-    float *pRdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    float *pGdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    float *pBdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-
-    // !!! no estoy del todo seguro de que esto sea necesario, se debería trabajar por
-    // !!! paquetes DENTRO del propio algoritmo y cada paquete se genera dentro, por lo
-    // !!! que igualar a -1 no tiene mucho sentido. aunque también podría estar perfecto,
-    // !!! no tengo ni idea.
-    /*
-    // Every component is initialized as "-1".
-    *(__m256 *) pRdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pRdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pRdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    *(__m256 *) pGdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pGdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pGdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    *(__m256 *) pBdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pBdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pBdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    */
-    
-	// pointer initialization. same as in single-thread??
-
-	// source image pointers
-	pRsrc = srcImage.data();         // red component
-	pGsrc = pRsrc + height * width;  // green component
-	pBsrc = pGsrc + height * width;  // blue component
-
-	// help image pointers
-	pRaid = aidImage.data();         // red component
-	pGaid = pRaid + height * width;  // green component
-	pBaid = pGaid + height * width;  // blue component
-
-	// destination image pointers
-	pRdest = pDstImage;               // red component
-	pGdest = pRdest + height * width; // green component
-	pBdest = pGdest + height * width; // blue component
-
-    for(int i = 0; i < REPETITIONS; i++) {
-
-        // Packets for each image are initialized.
-        __m256 kRsrc, kGsrc, kBsrc;
-        __m256 kRaid, kGaid, kBaid;
-        __m256 kRdest, kGdest, kBdest;
-
-        // The algorithm should operate with EACH block of pixels, each one of them being
-        // 'itemsPerPacket' in size.
-        for(int k = 0; k < nPixels; k += ITEMSPERPACKET) {
-
-            // Packets are read and translated from float*
-            kRsrc = _mm256_loadu_ps(pRsrc);
-            kGsrc = _mm256_loadu_ps(pGsrc);
-            kBsrc = _mm256_loadu_ps(pBsrc);
-
-            kRaid = _mm256_loadu_ps(pRaid);
-            kGaid = _mm256_loadu_ps(pGaid);
-            kBaid = _mm256_loadu_ps(pBaid);
-            
-            // (255 - pRaid[i]))
-            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRaid);
-            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGaid);
-            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBaid);
-
-            // (256 * (255 - pRaid[i])
-            kRdest = _mm256_mul_ps(_mm256_set1_ps(256), kRdest);
-            kGdest = _mm256_mul_ps(_mm256_set1_ps(256), kGdest);
-            kBdest = _mm256_mul_ps(_mm256_set1_ps(256), kBdest);
-
-            // (256 * (255 - pRaid[i])) / (pRsrc[i] + 1)
-            kRdest = _mm256_div_ps(kRdest, _mm256_add_ps(kRsrc, _mm256_set1_ps(1)));
-            kGdest = _mm256_div_ps(kGdest, _mm256_add_ps(kGsrc, _mm256_set1_ps(1)));
-            kBdest = _mm256_div_ps(kBdest, _mm256_add_ps(kBsrc, _mm256_set1_ps(1)));
-
-            // 255 - ((256 * (255 - pRaid[i])) / (pRsrc[i] + 1))
-            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRdest);
-            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGdest);
-            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBdest);
-
-            // Trim offscale values (<0, >255)
-            kRdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kRdest));
-            kGdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kGdest));
-            kBdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kBdest));
-
-
-            // Convert packets into floats for each packet.
-            for(int j = 0; j < ITEMSPERPACKET; j++) {
-                *pRdest = (float) (float *) &kRdest;
-                *pRdest = (float) (float *) &kRdest; // !!! <-- ESTO ESTÁ MAL 
-                *pRdest = (float) (float *) &kRdest;
-
-                pRdest++;
-                pBdest++;
-                pGdest++;
-            }
-
-            pRsrc += ITEMSPERPACKET;
-            pGsrc += ITEMSPERPACKET;
-            pBsrc += ITEMSPERPACKET;
-
-            pRaid += ITEMSPERPACKET;
-            pGaid += ITEMSPERPACKET;
-            pBaid += ITEMSPERPACKET;
-        }
+    // Initialize data arrays
+    for (int i = 0; i < VECTOR_SIZE; i++) {
+        *(a + i) = (float) i;       // a =  0, 1, 2, 3, …
+        *(b + i) = (float) (2 * i); // b =  0, 2, 4, 6, …
     }
 
-    if (clock_gettime(CLOCK_REALTIME, &tStart)==-1) {
-		printf("Couldn't obtain final time print.");
-		exit(1);
+    // Set the initial c element's value to -1 using vector extensions
+    *(__m256 *) c = _mm256_set1_ps(-1);
+    *(__m256 *)(c + ITEMS_PER_PACKET)     = _mm256_set1_ps(-1);
+    *(__m256 *)(c + ITEMS_PER_PACKET * 2) = _mm256_set1_ps(-1);
+
+    // Data arrays a and b must not be memory aligned to __m256 data (32 bytes)
+    // so we use intermediate variables to avoid execution errors.
+    // We make an unaligned load of va and vb
+    va = _mm256_loadu_ps(a);      // va = a[0][1]…[7] = 0, 1, 2, 3,  4,  5,  6,  7
+    vb = _mm256_loadu_ps(b);      // vb = b[0][1]…[7] = 0, 2, 4, 6,  8, 10, 12, 14
+    
+    // Performs the addition of two aligned vectors, each vector containing 8 floats
+    *(__m256 *)c = _mm256_add_ps(va, vb);// c = c[0][1]…[7] = 0, 3, 6, 9, 12, 15, 18, 21
+
+    // Next packet
+    // va = a[8][9]…[15] =  8,  9, 10, 11, 12, 13, 14, 15
+    // vb = b[8][9]…[15] = 16, 18, 20, 22, 24, 26, 28, 30
+    //  c = c[8][9]…[15] = 24, 27, 30, 33, 36, 39, 42, 45
+    va = _mm256_loadu_ps((a + ITEMS_PER_PACKET)); 
+    vb = _mm256_loadu_ps((b + ITEMS_PER_PACKET)); 
+    *(__m256 *)(c + ITEMS_PER_PACKET) = _mm256_add_ps(va, vb);
+
+    // If vectors va and vb have not a number of elements multiple of ITEMS_PER_PACKET 
+    // it is necessary to differentiate the last iteration. 
+
+    // Calculation of the elements in va and vb in excess
+    int dataInExcess = (VECTOR_SIZE)%(sizeof(__m256)/sizeof(float));
+
+    // Surplus data can be processed sequentially
+    
+    for (int i =0; i< dataInExcess; i++){
+        *(c + 2 * ITEMS_PER_PACKET + i) = *(a + 2 * ITEMS_PER_PACKET + i) + *(b + 2 * ITEMS_PER_PACKET + i);
+    }
+    
+    // Print resulting data from array addition
+    for (int i = 0; i < VECTOR_SIZE; i++) {
+        printf("\nc[%d]: %f", i, *(c + i));
 	}
+  
+    // Free memory allocated using _mm_malloc
+    // It has to be freed with _mm_free
+    _mm_free(c);
 
-    // Print final execution time
-	dElapsedTimeS = (tEnd.tv_sec - tStart.tv_sec);
-	dElapsedTimeS += (tEnd.tv_nsec - tStart.tv_nsec) / 1e+9;
-
-	printf ("Final execution time: %f\n", dElapsedTimeS);
-
-	CImg<float> dstImage(pDstImage, width, height, 1, nComp);
-
-	dstImage.save(DESTINATION_IMG);   // the image is saved to file.
-	dstImage.display(); // the resulting image is shown on screen.
-	free(pDstImage);    // the memory used by the pointers is freed.
-
-    return 0;
+	return 0;
 }
