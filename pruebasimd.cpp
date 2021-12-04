@@ -137,26 +137,23 @@ int main() {
 
             // Convert packets into floats for each packet.
             for(int j = 0; j < ITEMSPERPACKET; j++) {
-                *pRdest = (float) (float *) &kRdest;
-                *pRdest = (float) (float *) &kRdest; // !!! <-- ESTO ESTÁ MAL 
-                *pRdest = (float) (float *) &kRdest;
+                *pRdest = _mm256_cvtss_f32(kRdest);
+                *pGdest = _mm256_cvtss_f32(kGdest);
+                *pBdest = _mm256_cvtss_f32(kBdest);
 
-                pRdest++;
-                pBdest++;
-                pGdest++;
+                pRdest++ ; pBdest++ ; pGdest++ ;
             }
 
-            pRsrc += ITEMSPERPACKET;
-            pGsrc += ITEMSPERPACKET;
-            pBsrc += ITEMSPERPACKET;
-
-            pRaid += ITEMSPERPACKET;
-            pGaid += ITEMSPERPACKET;
-            pBaid += ITEMSPERPACKET;
+            pRsrc += ITEMSPERPACKET ; pGsrc += ITEMSPERPACKET ; pBsrc += ITEMSPERPACKET ;
+            pRaid += ITEMSPERPACKET ; pGaid += ITEMSPERPACKET ; pBaid += ITEMSPERPACKET ;
         }
+
+        pRdest -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
+        pRsrc -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
+        pRaid -= nPixels ; pGaid -= nPixels ; pBaid -= nPixels ;
     }
 
-    if (clock_gettime(CLOCK_REALTIME, &tStart)==-1) {
+    if (clock_gettime(CLOCK_REALTIME, &tStart) == -1) {
 		printf("Couldn't obtain final time print.");
 		exit(1);
 	}
