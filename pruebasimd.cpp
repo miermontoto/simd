@@ -54,16 +54,12 @@ int main() {
     float *pRdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
     float *pGdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
     float *pBdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    
-    // 256bit packets are created in order to store those components in memory.
-    __m256 vR, vG, vB; 
-
 
     // !!! no estoy del todo seguro de que esto sea necesario, se debería trabajar por
     // !!! paquetes DENTRO del propio algoritmo y cada paquete se genera dentro, por lo
     // !!! que igualar a -1 no tiene mucho sentido. aunque también podría estar perfecto,
     // !!! no tengo ni idea.
-
+    /*
     // Every component is initialized as "-1".
     *(__m256 *) pRdest = _mm256_set1_ps(-1);
     *(__m256 *)(pRdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
@@ -74,6 +70,7 @@ int main() {
     *(__m256 *) pBdest = _mm256_set1_ps(-1);
     *(__m256 *)(pBdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
     *(__m256 *)(pBdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
+    */
     
 	// pointer initialization. same as in single-thread??
 
@@ -103,16 +100,59 @@ int main() {
         // 'itemsPerPacket' in size.
         for(int k = 0; k < nPixels; k += ITEMSPERPACKET) {
 
-            // aquí se lee un paquete
-            // aquí se convierte un paquete de alguna manera a floats???
-            // se hace lo que se hacía en single-thread para operar con los floats.
-            // min max para evitar valores inváldos...
-            // se guardan los resultados??? no sé cómo
+            // Packets are read and translated from float*
+            kRsrc = _mm256_loadu_ps(pRsrc);
+            kGsrc = _mm256_loadu_ps(pGsrc);
+            kBsrc = _mm256_loadu_ps(pBsrc);
 
+            kRaid = _mm256_loadu_ps(pRaid);
+            kGaid = _mm256_loadu_ps(pGaid);
+            kBaid = _mm256_loadu_ps(pBaid);
+            
+            // (255 - pRaid[i]))
+            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRaid);
+            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGaid);
+            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBaid);
+
+            // (256 * (255 - pRaid[i])
+            kRdest = _mm256_mul_ps(_mm256_set1_ps(256), kRdest);
+            kGdest = _mm256_mul_ps(_mm256_set1_ps(256), kGdest);
+            kBdest = _mm256_mul_ps(_mm256_set1_ps(256), kBdest);
+
+            // (256 * (255 - pRaid[i])) / (pRsrc[i] + 1)
+            kRdest = _mm256_div_ps(kRdest, _mm256_add_ps(kRsrc, _mm256_set1_ps(1)));
+            kGdest = _mm256_div_ps(kGdest, _mm256_add_ps(kGsrc, _mm256_set1_ps(1)));
+            kBdest = _mm256_div_ps(kBdest, _mm256_add_ps(kBsrc, _mm256_set1_ps(1)));
+
+            // 255 - ((256 * (255 - pRaid[i])) / (pRsrc[i] + 1))
+            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRdest);
+            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGdest);
+            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBdest);
+
+            // Trim offscale values (<0, >255)
+            kRdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kRdest));
+            kGdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kGdest));
+            kBdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kBdest));
+
+
+            // Convert packets into floats for each packet.
             for(int j = 0; j < ITEMSPERPACKET; j++) {
-                // para cada float, algo. no tengo ni idea.
+                *pRdest = (float) (float *) &kRdest;
+                *pRdest = (float) (float *) &kRdest; // !!! <-- ESTO ESTÁ MAL 
+                *pRdest = (float) (float *) &kRdest;
+
+                pRdest++;
+                pBdest++;
+                pGdest++;
             }
 
+            pRsrc += ITEMSPERPACKET;
+            pGsrc += ITEMSPERPACKET;
+            pBsrc += ITEMSPERPACKET;
+
+            pRaid += ITEMSPERPACKET;
+            pGaid += ITEMSPERPACKET;
+            pBaid += ITEMSPERPACKET;
         }
     }
 
