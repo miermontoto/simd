@@ -19,30 +19,29 @@ const char* DESTINATION_IMG = "result.bmp"; // resulting image's file name.
 
 int main() {
 
-    CImg<float> srcImage(SOURCE_IMG);//Original Image
-	CImg<float> aidImage(HELP_IMG);//Used image 
+    CImg<float> srcImage(SOURCE_IMG); // Source image's information
+	CImg<float> aidImage(HELP_IMG);   // Aid image's information
 
-    float *pRsrc, *pGsrc, *pBsrc; // Punteros a los componentes de la imagen original.
-	float *pRaid, *pGaid, *pBaid; // Punteros a los componentes de la imagen de apoyo.
+    float *pRsrc, *pGsrc, *pBsrc; // Source image pointers
+	float *pRaid, *pGaid, *pBaid; // Aid image pointers
     float *pDstImage;
-    uint width, height;//
+    uint width, height; // general image information
 	uint nComp;
 
-    // Se inicializan las variables de tiempo
+    // Time variables are initialized.
 	struct timespec tStart, tEnd;
 	double dElapsedTimeS;
 
-
-
-    // Se almacena información sobre la foto original:
+    // Information about the source image is stored for later use.
     width  = srcImage.width();
 	height = srcImage.height();
 	nComp  = srcImage.spectrum();
-    //Reserva de espacio para imagen final
+
+    // Resulting image allocation
     pDstImage = (float *) malloc (width * height * nComp * sizeof(float));
 	if (pDstImage == NULL) {
-		perror("Allocating destination image");
-		exit(-2);
+		perror("Couldn't allocate resulting image.");
+		exit(1);
 	}
 
     //Calcula el numero de paquetes que necesitan para el tamaño de las imagenes
@@ -86,7 +85,7 @@ int main() {
 	pBdest = pGdest + height * width; // componente azul
 
     if (clock_gettime(CLOCK_REALTIME, &tStart)==-1) {
-		printf("Error al obtener el tiempo inicial.");
+		printf("Couldn't obtain final time print.");
 		exit(1);
 	}
     
