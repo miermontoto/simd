@@ -2,8 +2,6 @@
 #include <math.h>
 #include <CImg.h>
 #include <time.h>
-#include <iostream>     // std::cout
-#include <algorithm>    // std::max
 #include <immintrin.h>  // std::intrinsic functions
 
 using namespace std;
@@ -50,32 +48,9 @@ int main() {
 
     // Number of packets necessary to process an image.
     int nPackets = (nPixels / ITEMSPERPACKET);
+
     // If it isn't divisible, add one more packet (it won't be completely processed)
     if ( ((nPixels * sizeof(float)) % sizeof(__m256)) != 0) nPackets++;
-
-    /*
-    // Memory allocation for the destination image's components.
-    float *pRdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    float *pGdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    float *pBdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
-    */
-
-    // !!! no estoy del todo seguro de que esto sea necesario, se debería trabajar por
-    // !!! paquetes DENTRO del propio algoritmo y cada paquete se genera dentro, por lo
-    // !!! que igualar a -1 no tiene mucho sentido. aunque también podría estar perfecto,
-    // !!! no tengo ni idea.
-    /*
-    // Every component is initialized as "-1".
-    *(__m256 *) pRdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pRdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pRdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    *(__m256 *) pGdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pGdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pGdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    *(__m256 *) pBdest = _mm256_set1_ps(-1);
-    *(__m256 *)(pBdest + ITEMSPERPACKET)     = _mm256_set1_ps(-1);
-    *(__m256 *)(pBdest + ITEMSPERPACKET * 2) = _mm256_set1_ps(-1);
-    */
     
 	// pointer initialization. same as in single-thread??
 
@@ -102,14 +77,14 @@ int main() {
 
     for(int i = 0; i < REPETITIONS; i++) {
 
-        // Packets for each image are initialized.
-        __m256 kRsrc, kGsrc, kBsrc;
-        __m256 kRaid, kGaid, kBaid;
-        __m256 kRdest, kGdest, kBdest;
-
         // The algorithm should operate with EACH block of pixels, each one of them being
         // 'itemsPerPacket' in size.
         for(int k = 0; k < nPixels; k += ITEMSPERPACKET) {
+
+            // Packets for each image are initialized.
+            __m256 kRsrc, kGsrc, kBsrc; 
+            __m256 kRaid, kGaid, kBaid;
+            __m256 kRdest, kGdest, kBdest;
 
             // Packets are read and translated from float*
             kRsrc = _mm256_loadu_ps(pRsrc);
@@ -119,6 +94,8 @@ int main() {
             kRaid = _mm256_loadu_ps(pRaid);
             kGaid = _mm256_loadu_ps(pGaid);
             kBaid = _mm256_loadu_ps(pBaid);
+
+            // The algorithm itself using SIMD instructions only.
             
             // (255 - pRaid[i]))
             kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRaid);
@@ -140,18 +117,37 @@ int main() {
             kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGdest);
             kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBdest);
 
+            
             // Trim offscale values (<0, >255)
-            kRdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kRdest));
-            kGdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kGdest));
-            kBdest = _mm256_min_ps(_mm256_set1_ps(0), _mm256_max_ps(_mm256_set1_ps(255), kBdest));
+            kRdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kRdest));
+            kGdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kGdest));
+            kBdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kBdest));
+            
 
+            // Float pointers to final packets. These allow to select each pixel.
+            float *prd = (float *) &kRdest;
+            float *pgd = (float *) &kGdest;
+            float *pbd = (float *) &kBdest;
 
-            // Convert packets into floats for each packet.
+            // Convert packets into floats.
             for(long unsigned int j = 0; j < ITEMSPERPACKET; j++) {
+
+                /* 
+                 * The following method uses SIMD instructions, but the wrong one.
+                 * This instructions only forwards the FIRST pixel of each packet, which generates
+                 * a very blocky image. Maybe a better instruction exists, but there is a workaround.
+                 */
+                /*
                 *pRdest = _mm256_cvtss_f32(kRdest);
                 *pGdest = _mm256_cvtss_f32(kGdest);
                 *pBdest = _mm256_cvtss_f32(kBdest);
-
+                */
+                
+                *pRdest = *prd;
+                *pGdest = *pgd;
+                *pBdest = *pbd;
+                prd++ ; pgd++ ; pbd++ ;
+                
                 pRdest++ ; pBdest++ ; pGdest++ ;
             }
 
@@ -160,8 +156,9 @@ int main() {
         }
 
         // Each time the algorithm is repeated, go back to the starting pixel.
+        printf("algorithm finished %d times.\n", i + 1);
         pRdest -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
-        pRsrc -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
+        pRsrc -= nPixels ; pGsrc -= nPixels ; pBsrc -= nPixels ;
         pRaid -= nPixels ; pGaid -= nPixels ; pBaid -= nPixels ;
     }
 
@@ -177,7 +174,9 @@ int main() {
 
 	CImg<float> dstImage(pDstImage, width, height, 1, nComp);
 
+    //dstImage.cut(0, 255); <- esto es más óptimo :')
 	dstImage.save(DESTINATION_IMG);   // the image is saved to file.
+    if(dstImage.mean() == 0.0) printf("Blank image.\n");
 	dstImage.display(); // the resulting image is shown on screen.
 	free(pDstImage);    // the memory used by the pointers is freed.
 
