@@ -24,6 +24,7 @@ int main() {
 
     float *pRsrc, *pGsrc, *pBsrc; // Source image pointers
 	float *pRaid, *pGaid, *pBaid; // Aid image pointers
+    float *pRdest, *pGdest, *pBdest; // Resulting image pointers
     float *pDstImage;
     uint width, height; // General image information variables
 	uint nComp;
@@ -148,6 +149,7 @@ int main() {
             pRaid += ITEMSPERPACKET ; pGaid += ITEMSPERPACKET ; pBaid += ITEMSPERPACKET ;
         }
 
+        // Each time the algorithm is repeated, go back to the starting pixel.
         pRdest -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
         pRsrc -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
         pRaid -= nPixels ; pGaid -= nPixels ; pBaid -= nPixels ;
@@ -161,7 +163,6 @@ int main() {
     // Print final execution time
 	dElapsedTimeS = (tEnd.tv_sec - tStart.tv_sec);
 	dElapsedTimeS += (tEnd.tv_nsec - tStart.tv_nsec) / 1e+9;
-
 	printf ("Final execution time: %f\n", dElapsedTimeS);
 
 	CImg<float> dstImage(pDstImage, width, height, 1, nComp);
