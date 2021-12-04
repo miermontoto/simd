@@ -28,7 +28,7 @@ int main() {
     float *pDstImage;
     uint width, height; // General image information variables
 	uint nComp;
-    int nPixels = width * height;
+    int nPixels;
 
     // Time variables necessary to display the execution time when the algorithm is done.
 	struct timespec tStart, tEnd;
@@ -38,6 +38,8 @@ int main() {
     width  = srcImage.width();
 	height = srcImage.height();
 	nComp  = srcImage.spectrum();
+
+    nPixels = width * height;
 
     // Resulting image allocation
     pDstImage = (float *) malloc (nPixels * nComp * sizeof(float));
@@ -51,10 +53,12 @@ int main() {
     // If it isn't divisible, add one more packet (it won't be completely processed)
     if ( ((nPixels * sizeof(float)) % sizeof(__m256)) != 0) nPackets++;
 
+    /*
     // Memory allocation for the destination image's components.
     float *pRdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
     float *pGdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
     float *pBdest = (float *)_mm_malloc(sizeof(__m256) * nPackets, sizeof(__m256));
+    */
 
     // !!! no estoy del todo seguro de que esto sea necesario, se debería trabajar por
     // !!! paquetes DENTRO del propio algoritmo y cada paquete se genera dentro, por lo
@@ -89,6 +93,12 @@ int main() {
 	pRdest = pDstImage;               // red component
 	pGdest = pRdest + height * width; // green component
 	pBdest = pGdest + height * width; // blue component
+
+    // Starting time
+	if (clock_gettime(CLOCK_REALTIME, &tStart) == -1) {
+		printf("Error: couldn't obtain starting time print.");
+		exit(1);
+	}
 
     for(int i = 0; i < REPETITIONS; i++) {
 
@@ -137,7 +147,7 @@ int main() {
 
 
             // Convert packets into floats for each packet.
-            for(int j = 0; j < ITEMSPERPACKET; j++) {
+            for(long unsigned int j = 0; j < ITEMSPERPACKET; j++) {
                 *pRdest = _mm256_cvtss_f32(kRdest);
                 *pGdest = _mm256_cvtss_f32(kGdest);
                 *pBdest = _mm256_cvtss_f32(kBdest);
@@ -155,8 +165,8 @@ int main() {
         pRaid -= nPixels ; pGaid -= nPixels ; pBaid -= nPixels ;
     }
 
-    if (clock_gettime(CLOCK_REALTIME, &tStart) == -1) {
-		printf("Couldn't obtain final time print.");
+    if (clock_gettime(CLOCK_REALTIME, &tEnd) == -1) {
+		printf("Error: couldn't obtain final time print.");
 		exit(1);
 	}
 
