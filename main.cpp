@@ -2,6 +2,7 @@
 #include <math.h>
 #include <CImg.h>
 #include <time.h>
+#include <fstream>
 #include <immintrin.h>  // std::intrinsic functions
 
 using namespace std;
@@ -16,6 +17,15 @@ const char* DESTINATION_IMG = "result.bmp"; // resulting image's file name.
 
 
 int main() {
+    
+    // Check to see if both files to process actually exist.
+    std::ifstream file1(SOURCE_IMG);
+    std::ifstream file2(HELP_IMG);
+
+	if(!file1 || !file2) {
+		printf("Couldn't locate source and help images.\n");
+		exit(1);
+	}
 
     CImg<float> srcImage(SOURCE_IMG); // Source image's information
 	CImg<float> aidImage(HELP_IMG);   // Aid image's information
