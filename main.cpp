@@ -56,13 +56,19 @@ int main() {
 		exit(1);
 	}
 
+    // The width and height of both images are checked to be equal.
+	if(srcImage.width() != aidImage.width() || srcImage.height() != aidImage.height()) {
+		perror("Images to blend don't have the same size.");
+		exit(1);
+	}
+
     // Number of packets necessary to process an image.
     int nPackets = (nPixels / ITEMSPERPACKET);
 
     // If it isn't divisible, add one more packet (it won't be completely processed)
     if ( ((nPixels * sizeof(float)) % sizeof(__m256)) != 0) nPackets++;
     
-	// pointer initialization. same as in single-thread??
+	// pointer initialization. same as in single-thread
 
 	// source image pointers
 	pRsrc = srcImage.data();         // red component
@@ -96,6 +102,10 @@ int main() {
             __m256 kRaid, kGaid, kBaid;
             __m256 kRdest, kGdest, kBdest;
 
+            // Packets preloaded with desired values to avoid suboptimal repetition.
+            __m256 p255 = _mm256_set1_ps(255), p256 = _mm256_set1_ps(256);
+            __m256 p0 = _mm256_set1_ps(0), p1 = _mm256_set1_ps(1);
+
             // Packets are read and translated from float*
             kRsrc = _mm256_loadu_ps(pRsrc);
             kGsrc = _mm256_loadu_ps(pGsrc);
@@ -108,30 +118,30 @@ int main() {
             // The algorithm itself using SIMD instructions only.
             
             // (255 - pRaid[i]))
-            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRaid);
-            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGaid);
-            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBaid);
+            kRdest = _mm256_sub_ps(p255, kRaid);
+            kGdest = _mm256_sub_ps(p255, kGaid);
+            kBdest = _mm256_sub_ps(p255, kBaid);
 
             // (256 * (255 - pRaid[i])
-            kRdest = _mm256_mul_ps(_mm256_set1_ps(256), kRdest);
-            kGdest = _mm256_mul_ps(_mm256_set1_ps(256), kGdest);
-            kBdest = _mm256_mul_ps(_mm256_set1_ps(256), kBdest);
+            kRdest = _mm256_mul_ps(p256, kRdest);
+            kGdest = _mm256_mul_ps(p256, kGdest);
+            kBdest = _mm256_mul_ps(p256, kBdest);
 
             // (256 * (255 - pRaid[i])) / (pRsrc[i] + 1)
-            kRdest = _mm256_div_ps(kRdest, _mm256_add_ps(kRsrc, _mm256_set1_ps(1)));
-            kGdest = _mm256_div_ps(kGdest, _mm256_add_ps(kGsrc, _mm256_set1_ps(1)));
-            kBdest = _mm256_div_ps(kBdest, _mm256_add_ps(kBsrc, _mm256_set1_ps(1)));
+            kRdest = _mm256_div_ps(kRdest, _mm256_add_ps(kRsrc, p1));
+            kGdest = _mm256_div_ps(kGdest, _mm256_add_ps(kGsrc, p1));
+            kBdest = _mm256_div_ps(kBdest, _mm256_add_ps(kBsrc, p1));
 
             // 255 - ((256 * (255 - pRaid[i])) / (pRsrc[i] + 1))
-            kRdest = _mm256_sub_ps(_mm256_set1_ps(255), kRdest);
-            kGdest = _mm256_sub_ps(_mm256_set1_ps(255), kGdest);
-            kBdest = _mm256_sub_ps(_mm256_set1_ps(255), kBdest);
+            kRdest = _mm256_sub_ps(p255, kRdest);
+            kGdest = _mm256_sub_ps(p255, kGdest);
+            kBdest = _mm256_sub_ps(p255, kBdest);
 
             
             // Trim offscale values (<0, >255)
-            kRdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kRdest));
-            kGdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kGdest));
-            kBdest = _mm256_max_ps(_mm256_set1_ps(0), _mm256_min_ps(_mm256_set1_ps(255), kBdest));
+            kRdest = _mm256_max_ps(p0, _mm256_min_ps(p255, kRdest));
+            kGdest = _mm256_max_ps(p0, _mm256_min_ps(p255, kGdest));
+            kBdest = _mm256_max_ps(p0, _mm256_min_ps(p255, kBdest));
             
 
             // Float pointers to final packets. These allow to select each pixel.
@@ -141,18 +151,6 @@ int main() {
 
             // Convert packets into floats.
             for(long unsigned int j = 0; j < ITEMSPERPACKET; j++) {
-
-                /* 
-                 * The following method uses SIMD instructions, but the wrong one.
-                 * This instructions only forwards the FIRST pixel of each packet, which generates
-                 * a very blocky image. Maybe a better instruction exists, but there is a workaround.
-                 */
-                /*
-                *pRdest = _mm256_cvtss_f32(kRdest);
-                *pGdest = _mm256_cvtss_f32(kGdest);
-                *pBdest = _mm256_cvtss_f32(kBdest);
-                */
-                
                 *pRdest = *prd;
                 *pGdest = *pgd;
                 *pBdest = *pbd;
@@ -166,7 +164,7 @@ int main() {
         }
 
         // Each time the algorithm is repeated, go back to the starting pixel.
-        printf("algorithm finished %d times.\n", i + 1);
+        //printf("algorithm finished %d times.\n", i + 1);
         pRdest -= nPixels ; pGdest -= nPixels ; pBdest -= nPixels ;
         pRsrc -= nPixels ; pGsrc -= nPixels ; pBsrc -= nPixels ;
         pRaid -= nPixels ; pGaid -= nPixels ; pBaid -= nPixels ;
@@ -184,11 +182,11 @@ int main() {
 
 	CImg<float> dstImage(pDstImage, width, height, 1, nComp);
 
-    //dstImage.cut(0, 255); <- esto es más óptimo :')
+    //dstImage.cut(0, 255);
 	dstImage.save(DESTINATION_IMG);   // the image is saved to file.
     if(dstImage.mean() == 0.0) printf("Blank image.\n");
 	dstImage.display(); // the resulting image is shown on screen.
-	free(pDstImage);    // the memory used by the pointers is freed.
+	free(pDstImage); // the memory used by the pointers is freed.
 
     return 0;
 }
