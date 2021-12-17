@@ -2,4 +2,4 @@ debug/
 release/
 *.bmp
 *.gz
-.vscode/c_cpp_properties.json
+.vscode
